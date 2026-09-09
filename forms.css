@@ -1,0 +1,58 @@
+.family-fields{
+  border:1px solid #cfe0e6;
+  border-radius:16px;
+  background:#f8fbfa;
+  padding:18px;
+  display:grid;
+  gap:16px;
+}
+
+.modal>div:has(#worker-form){
+  width:min(920px,100%);
+}
+
+.family-heading{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+}
+
+.family-heading>div{
+  display:grid;
+  gap:4px;
+}
+
+.family-heading small{
+  color:#6f86a2;
+  font-weight:400;
+}
+
+.family-heading button{
+  min-width:max-content;
+}
+
+.dependents{
+  display:grid;
+  gap:12px;
+}
+
+.dependent-row{
+  display:grid;
+  grid-template-columns:2fr 1fr 1fr auto;
+  align-items:end;
+  gap:12px;
+  padding:14px;
+  background:#fff;
+  border:1px solid #dce6e9;
+  border-radius:13px;
+}
+
+.dependent-row button{
+  min-height:43px;
+}
+
+@media(max-width:720px){
+  .family-heading{align-items:flex-start;flex-direction:column}
+  .dependent-row{grid-template-columns:1fr}
+}
