@@ -110,8 +110,13 @@ async function importExcel(){
     if(!m)throw Error('No se reconoció el periodo.');
     const year=+m[1],month=+m[2];
     const isDayCell=v=>{const n=Number(String(v).trim().replace(',','.'));return Number.isInteger(n)&&n>=1&&n<=31};
-    const dayRow=rows.findIndex(r=>r.filter(isDayCell).length>=20);
-    if(dayRow<0)throw Error('No se reconocieron los días del reporte. Verifica que sea el archivo StandardReport.xls original.');
+    const detectedDayRow=rows.findIndex(r=>r.filter(isDayCell).length>=20);
+    const firstWorkerRow=rows.findIndex(r=>r.some(v=>String(v).trim()==='ID:'));
+    const dayRow=detectedDayRow>=0?detectedDayRow:firstWorkerRow-1;
+    if(dayRow<0)throw Error('No se reconoció la estructura del reporte de asistencia.');
+    const detectedDays=(rows[dayRow]||[]).map((cell,c)=>({day:Number(String(cell).trim().replace(',','.')),c})).filter(x=>isDayCell(x.day));
+    const daysInMonth=new Date(year,month,0).getDate();
+    const dayColumns=detectedDays.length>=20?detectedDays:Array.from({length:daysInMonth},(_,c)=>({day:c+1,c}));
     const {data:sched}=await db.from('schedules').select('*'),daily=[];
     for(let r=dayRow+1;r<rows.length-1;r++){
       const row=rows[r].map(String),idx=row.findIndex(v=>v.trim()==='ID:');
@@ -119,8 +124,7 @@ async function importExcel(){
       const code=String(row.slice(idx+1).find(v=>v.trim()&&/^\d+$/.test(v.trim()))||''),worker=state.workers.find(w=>String(w.code)===code);
       if(!worker)continue;
       const events=(rows[r+1]||[]).map(String);
-      rows[dayRow].forEach((cell,c)=>{
-        const day=Number(String(cell).trim().replace(',','.'));if(!isDayCell(cell))return;
+      dayColumns.forEach(({day,c})=>{
         const js=new Date(year,month-1,day),dow=js.getDay()||7,shift=(sched||[]).filter(s=>s.worker_id===worker.id&&s.day_of_week===dow).sort((a,b)=>b.week_start.localeCompare(a.week_start))[0];
         if(!shift?.is_workday)return;
         const marks=(events[c]||'').match(/\d{2}:\d{2}/g)||[],work_date=`${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`,mins=t=>{const [h,m]=t.split(':').map(Number);return h*60+m};
