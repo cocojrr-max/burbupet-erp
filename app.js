@@ -103,6 +103,7 @@ attendance=async function(){
   head.insertAdjacentHTML('beforeend',`<label class="month-filter">Mes visible <input type="month" value="${selected}" onchange="applyAttendanceMonthFilter(this.value)"></label>`);
   $('#view .table-wrap').insertAdjacentHTML('afterend','<p id="attendance-empty" class="empty hidden">No hay registros de asistencia en este mes.</p>');
   applyAttendanceMonthFilter(selected);
+  if(state.profile.app_role==='admin')await addIncompleteActions();
 };
 function applyAttendanceMonthFilter(value){
   state.attendanceMonth=value;
@@ -113,9 +114,25 @@ function applyAttendanceMonthFilter(value){
   });
   $('#attendance-empty')?.classList.toggle('hidden',visible>0);
 }
+async function addIncompleteActions(){
+  const {data}=await db.from('attendance').select('id,worker_id,work_date,workers(full_name)').eq('status','incomplete');
+  const records=new Map((data||[]).map(x=>[`${date(x.work_date)}|${x.workers?.full_name}`,x]));
+  document.querySelectorAll('#view .table-wrap tbody tr').forEach(row=>{
+    if(!row.cells[6]?.textContent.includes('Marcación incompleta'))return;
+    const key=`${row.cells[0].textContent.trim()}|${row.cells[1].textContent.trim().replace(/\s+/g,' ')}`,item=records.get(key);if(!item)return;
+    const box=document.createElement('div');box.className='actions incomplete-actions';box.innerHTML=`<button type="button" onclick="completeAttendance(${item.id})">Completar hora</button><button type="button" class="secondary" onclick="requestAttendanceExplanation(${item.id})">Solicitar explicación</button>`;row.cells[7].appendChild(box);
+  });
+}
+async function completeAttendance(id){
+  const {data:x,error}=await db.from('attendance').select('*').eq('id',id).single();if(error)return toast(error.message,true);
+  const {data:rules}=await db.from('company_settings').select('late_tolerance').eq('id',1).single(),lateTolerance=Number(rules?.late_tolerance??5);
+  const missing=x.clock_in?'salida':'entrada';modal(`<h2>Completar marcación</h2><p>Registra manualmente la hora de ${missing}.</p><form id="complete-mark"><label>Hora de ${missing}<input type="time" name="time" required></label><label>Motivo de la corrección<textarea name="note" required placeholder="Ej.: olvidó marcar la salida"></textarea></label><button>Guardar corrección</button></form>`);
+  $('#complete-mark').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),value=f.get('time'),mins=t=>{const [h,m]=String(t).slice(0,5).split(':').map(Number);return h*60+m},clock_in=x.clock_in||value,clock_out=x.clock_out||value;let late=0,early=0,overtime=0;if(x.scheduled_start&&x.scheduled_end){const delay=Math.max(0,mins(clock_in)-mins(x.scheduled_start));late=delay>lateTolerance?delay:0;early=Math.max(0,mins(x.scheduled_end)-mins(clock_out));overtime=Math.max(0,mins(clock_out)-mins(x.scheduled_end))}const clean=late===0&&early===0&&overtime===0,update={clock_in,clock_out,status:'present',late_minutes:late,early_leave_minutes:early,overtime_minutes:overtime,overtime_review_status:overtime>0?'pending':'not_applicable',approved_overtime_minutes:0,review_status:clean?'approved':'pending',admin_note:`Marcación completada por administración: ${f.get('note')}`};const {error:ue}=await db.from('attendance').update(update).eq('id',id);if(ue)return toast(ue.message,true);$('#modal').remove();toast('Marcación completada y cálculos actualizados.');attendance()};
+}
+async function requestAttendanceExplanation(id){const message=prompt('Mensaje para el trabajador:','Por favor, explica por qué falta una marcación en esta fecha.');if(!message)return;const {error}=await db.from('attendance').update({review_status:'pending',admin_note:`Solicitud del administrador: ${message}`}).eq('id',id);toast(error?error.message:'Solicitud enviada al portal del trabajador.',!!error);attendance()}
 async function reviewAttendance(id,status){if(!status)return;const note=prompt('Nota del administrador (opcional):')||'';const {error}=await db.from('attendance').update({review_status:status,admin_note:note}).eq('id',id);toast(error?error.message:'Incidencia actualizada.',!!error);attendance()}
 function reviewOvertime(id,detected,current=0){modal(`<h2>Revisar permanencia posterior</h2><p>El huellero detectó <b>${detected} minutos</b> después del horario de salida.</p><form id="overtime-review" class="form-card"><label>Decisión<select name="decision"><option value="approved">Aprobar todo el tiempo</option><option value="partial" ${current>0&&current<detected?'selected':''}>Aprobar parcialmente</option><option value="rejected">Rechazar</option></select></label><label>Minutos reconocidos<input name="minutes" type="number" min="0" max="${detected}" value="${current||detected}" required></label><label>Motivo o sustento<textarea name="note" required placeholder="Ej.: cierre de caja autorizado, atención de emergencia o permanencia no laborada"></textarea></label><button>Guardar decisión</button></form>`);$('#overtime-review').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),decision=f.get('decision');let minutes=Number(f.get('minutes'));if(decision==='approved')minutes=detected;if(decision==='rejected')minutes=0;if(minutes<0||minutes>detected)return toast('Los minutos aprobados deben estar entre 0 y '+detected+'.',true);const {error}=await db.from('attendance').update({approved_overtime_minutes:minutes,overtime_review_status:decision,overtime_review_note:f.get('note'),overtime_reviewed_at:new Date().toISOString(),overtime_reviewed_by:state.session.user.id}).eq('id',id);if(error)return toast(error.message,true);$('#modal').remove();toast('Tiempo posterior revisado correctamente.');attendance()}}
-function justify(id){modal(`<h2>Enviar justificación</h2><form id="just"><label>Explique lo ocurrido<textarea name="worker_response" required></textarea></label><button>Enviar</button></form>`);$('#just').onsubmit=async e=>{e.preventDefault();const response=new FormData(e.target).get('worker_response');const {error}=await db.from('attendance').update({review_status:'justified',worker_response:response}).eq('id',id);if(error)return toast(error.message,true);$('#modal').remove();toast('Justificación enviada.');attendance()}}
+async function justify(id){const {data:x}=await db.from('attendance').select('admin_note,worker_response').eq('id',id).single();modal(`<h2>Responder incidencia</h2>${x?.admin_note?`<div class="notice"><b>Mensaje del administrador</b><br>${esc(x.admin_note)}</div>`:''}<form id="just"><label>Explica lo ocurrido<textarea name="worker_response" required>${esc(x?.worker_response||'')}</textarea></label><button>Enviar respuesta</button></form>`);$('#just').onsubmit=async e=>{e.preventDefault();const response=new FormData(e.target).get('worker_response');const {error}=await db.from('attendance').update({review_status:'justified',worker_response:response}).eq('id',id);if(error)return toast(error.message,true);$('#modal').remove();toast('Respuesta enviada al administrador.');attendance()}}
 async function importExcel(){
   const file=$('#xls').files[0];
   if(!file)return toast('Selecciona el archivo del huellero.',true);
@@ -139,7 +156,7 @@ async function importExcel(){
     const detectedDays=(rows[dayRow]||[]).map((cell,c)=>({day:Number(String(cell).trim().replace(',','.')),c})).filter(x=>isDayCell(x.day));
     const daysInMonth=new Date(year,month,0).getDate();
     const dayColumns=detectedDays.length>=20?detectedDays:Array.from({length:daysInMonth},(_,c)=>({day:c+1,c}));
-    const {data:sched}=await db.from('schedules').select('*'),daily=[];
+    const [{data:sched},{data:rules}]=await Promise.all([db.from('schedules').select('*'),db.from('company_settings').select('late_tolerance').eq('id',1).single()]),daily=[],lateTolerance=Number(rules?.late_tolerance??5);
     for(let r=dayRow+1;r<rows.length-1;r++){
       const row=rows[r].map(String),idx=row.findIndex(v=>v.trim()==='ID:');
       if(idx<0)continue;
@@ -148,14 +165,18 @@ async function importExcel(){
       const events=(rows[r+1]||[]).map(String);
       dayColumns.forEach(({day,c})=>{
         const js=new Date(year,month-1,day),dow=js.getDay()||7,shift=(sched||[]).filter(s=>s.worker_id===worker.id&&s.day_of_week===dow).sort((a,b)=>b.week_start.localeCompare(a.week_start))[0];
-        if(!shift?.is_workday)return;
         const marks=(events[c]||'').match(/\d{2}:\d{2}/g)||[],work_date=`${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`,mins=t=>{const [h,m]=t.split(':').map(Number);return h*60+m};
         if(work_date>cutoff)return;
+        if(!shift?.is_workday){
+          if(!marks.length)return;
+          const unscheduled={worker_id:worker.id,work_date,scheduled_start:null,scheduled_end:null,raw_marks:marks,source:'excel',late_minutes:0,early_leave_minutes:0,overtime_minutes:0,approved_overtime_minutes:0,overtime_review_status:'not_applicable',review_status:'pending',admin_note:'Horario no configurado para esta fecha',status:marks.length>1?'present':'incomplete'};
+          unscheduled.clock_in=marks[0];if(marks.length>1)unscheduled.clock_out=marks.at(-1);daily.push(unscheduled);return;
+        }
         let o={worker_id:worker.id,work_date,scheduled_start:shift.start_time,scheduled_end:shift.end_time,raw_marks:marks,source:'excel',late_minutes:0,early_leave_minutes:0,overtime_minutes:0,approved_overtime_minutes:0,overtime_review_status:'not_applicable',review_status:'pending',status:'absent'};
-        if(marks.length===1){o.clock_in=marks[0];o.status='incomplete'}
+        if(marks.length===1){const mark=marks[0],markMinute=mins(mark),middle=(mins(shift.start_time)+mins(shift.end_time))/2;o.status='incomplete';if(markMinute<=middle){o.clock_in=mark;const delay=Math.max(0,markMinute-mins(shift.start_time));o.late_minutes=delay>lateTolerance?delay:0}else{o.clock_out=mark;o.early_leave_minutes=Math.max(0,mins(shift.end_time)-markMinute)}}
         if(marks.length>1){
           o.clock_in=marks[0];o.clock_out=marks.at(-1);o.status='present';
-          o.late_minutes=Math.max(0,mins(o.clock_in)-mins(shift.start_time));
+          {const delay=Math.max(0,mins(o.clock_in)-mins(shift.start_time));o.late_minutes=delay>lateTolerance?delay:0}
           o.early_leave_minutes=Math.max(0,mins(shift.end_time)-mins(o.clock_out));
           o.overtime_minutes=Math.max(0,mins(o.clock_out)-mins(shift.end_time));
           o.overtime_review_status=o.overtime_minutes>0?'pending':'not_applicable';
