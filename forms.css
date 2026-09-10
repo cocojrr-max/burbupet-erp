@@ -56,3 +56,4 @@
   .family-heading{align-items:flex-start;flex-direction:column}
   .dependent-row{grid-template-columns:1fr}
 }
+.month-filter{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;color:#31537e}.month-filter input{width:auto;min-width:165px;background:#fff}
