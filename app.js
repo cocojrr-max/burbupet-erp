@@ -108,8 +108,10 @@ async function importExcel(){
     const rows=XLSX.utils.sheet_to_json(sheet,{header:1,raw:false,defval:''});
     const period=rows.flat().map(String).find(v=>/\d{4}-\d{2}-\d{2}\s*~/.test(v))||'',m=period.match(/(\d{4})-(\d{2})-/);
     if(!m)throw Error('No se reconoció el periodo.');
-    const year=+m[1],month=+m[2],dayRow=rows.findIndex(r=>r.filter(v=>/^\d{1,2}$/.test(String(v))).length>=20);
-    if(dayRow<0)throw Error('No se encontró la fila de días.');
+    const year=+m[1],month=+m[2];
+    const isDayCell=v=>{const n=Number(String(v).trim().replace(',','.'));return Number.isInteger(n)&&n>=1&&n<=31};
+    const dayRow=rows.findIndex(r=>r.filter(isDayCell).length>=20);
+    if(dayRow<0)throw Error('No se reconocieron los días del reporte. Verifica que sea el archivo StandardReport.xls original.');
     const {data:sched}=await db.from('schedules').select('*'),daily=[];
     for(let r=dayRow+1;r<rows.length-1;r++){
       const row=rows[r].map(String),idx=row.findIndex(v=>v.trim()==='ID:');
@@ -118,7 +120,7 @@ async function importExcel(){
       if(!worker)continue;
       const events=(rows[r+1]||[]).map(String);
       rows[dayRow].forEach((cell,c)=>{
-        const day=+cell;if(!day||day>31)return;
+        const day=Number(String(cell).trim().replace(',','.'));if(!isDayCell(cell))return;
         const js=new Date(year,month-1,day),dow=js.getDay()||7,shift=(sched||[]).filter(s=>s.worker_id===worker.id&&s.day_of_week===dow).sort((a,b)=>b.week_start.localeCompare(a.week_start))[0];
         if(!shift?.is_workday)return;
         const marks=(events[c]||'').match(/\d{2}:\d{2}/g)||[],work_date=`${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`,mins=t=>{const [h,m]=t.split(':').map(Number);return h*60+m};
