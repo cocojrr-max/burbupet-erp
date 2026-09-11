@@ -1,4 +1,4 @@
-const C='burbupet-erp-v17';
+const C='burbupet-erp-v19';
 
 self.addEventListener('install',event=>{
   self.skipWaiting();
