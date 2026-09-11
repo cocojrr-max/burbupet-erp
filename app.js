@@ -111,8 +111,16 @@ attendance=async function(){
   head.insertAdjacentHTML('beforeend',`<label class="month-filter">Mes visible <input type="month" value="${selected}" onchange="applyAttendanceMonthFilter(this.value)"></label>`);
   $('#view .table-wrap').insertAdjacentHTML('afterend','<p id="attendance-empty" class="empty hidden">No hay registros de asistencia en este mes.</p>');
   applyAttendanceMonthFilter(selected);
-  if(state.profile.app_role==='admin')await addIncompleteActions();
+  if(state.profile.app_role==='admin'){await addIncompleteActions();await renderImportSummaries()}
 };
+
+async function renderImportSummaries(){
+  const {data,error}=await db.from('attendance_imports').select('id,file_name,period_start,period_end,uploaded_at,summary').order('uploaded_at',{ascending:false}).limit(12);
+  if(error||!(data||[]).some(x=>Array.isArray(x.summary)&&x.summary.length))return;
+  const section=document.createElement('section');section.className='team-panel import-history';
+  section.innerHTML=`<div class="panel-title"><div><em>HISTORIAL DE ACTUALIZACIONES</em><h2>Resumen de cada carga por trabajador</h2><p>Cada archivo cargado conserva su propia fotografía de resultados, aunque actualices varias veces el mismo periodo.</p></div></div>${data.filter(x=>Array.isArray(x.summary)&&x.summary.length).map((imp,index)=>`<details class="card" ${index===0?'open':''}><summary><b>${date(imp.period_start)} al ${date(imp.period_end)}</b><small>${esc(imp.file_name)} · ${new Date(imp.uploaded_at).toLocaleString('es-PE')}</small></summary><div class="table-wrap"><table><thead><tr><th>Trabajador</th><th>Faltas</th><th>Incompletas</th><th>Tardanza</th><th>Salida anticipada</th><th>Permanencia</th><th>Extra aprobada</th><th>Descuento estimado</th><th>Pendientes</th></tr></thead><tbody>${imp.summary.map(s=>`<tr><td><b>${esc(s.worker_name)}</b></td><td>${s.absences}</td><td>${s.incomplete_marks}</td><td>${s.late_minutes} min</td><td>${s.early_leave_minutes} min</td><td>${s.overtime_detected_minutes} min</td><td>${s.overtime_approved_minutes} min</td><td>${money(s.attendance_discount)}</td><td>${s.pending_incidents}</td></tr>`).join('')}</tbody></table></div></details>`).join('')}`;
+  $('#view').appendChild(section);
+}
 function applyAttendanceMonthFilter(value){
   state.attendanceMonth=value;
   let visible=0;
@@ -230,7 +238,11 @@ async function importExcel(){
         x.overtime_reviewed_by=old.overtime_reviewed_by;
       }
     });
-    const {data:imp,error:ie}=await db.from('attendance_imports').insert({file_name:file.name,period_start:dates[0],period_end:dates[1],uploaded_by:state.session.user.id}).select('id').single();
+    const summary=importedWorkerIds.map(workerId=>{
+      const worker=state.workers.find(w=>w.id===workerId),workerDays=daily.filter(x=>x.worker_id===workerId),chargeable=workerDays.filter(x=>x.review_status!=='justified'),minute=Number(worker?.base_salary||0)/30/8/60;
+      return{worker_id:workerId,worker_name:worker?.full_name||'',absences:chargeable.filter(x=>x.status==='absent').length,incomplete_marks:workerDays.filter(x=>x.status==='incomplete').length,late_minutes:chargeable.reduce((s,x)=>s+Number(x.late_minutes||0),0),early_leave_minutes:chargeable.reduce((s,x)=>s+Number(x.early_leave_minutes||0),0),overtime_detected_minutes:workerDays.reduce((s,x)=>s+Number(x.overtime_minutes||0),0),overtime_approved_minutes:workerDays.reduce((s,x)=>s+Number(x.approved_overtime_minutes||0),0),attendance_discount:Number(chargeable.reduce((s,x)=>s+(x.status==='absent'?Number(worker?.base_salary||0)/30:(Number(x.late_minutes||0)+Number(x.early_leave_minutes||0))*minute),0).toFixed(2)),pending_incidents:workerDays.filter(x=>x.review_status==='pending').length};
+    });
+    const {data:imp,error:ie}=await db.from('attendance_imports').insert({file_name:file.name,period_start:dates[0],period_end:cutoff,uploaded_by:state.session.user.id,summary}).select('id').single();
     if(ie)throw ie;
     daily.forEach(x=>x.import_id=imp.id);
     const {error}=await db.from('attendance').upsert(daily,{onConflict:'worker_id,work_date',ignoreDuplicates:false});
@@ -248,7 +260,7 @@ async function payroll(){
   $('#view').innerHTML=`${admin?'<div class="section-head"><h2>Planillas</h2><div class="actions"><button class="secondary" onclick="registerHolidayWork()">Registrar feriado</button><button onclick="preparePayroll()">Preparar planilla</button></div></div>':'<div class="section-head"><h2>Mis pagos</h2></div>'}<div class="notice"><b>Régimen de microempresa:</b> no se calculan CTS, gratificaciones legales ni asignación familiar. La pensión usa la base pensionaria; asistencia, horas extra y feriados usan el sueldo mensual total.</div><div class="table-wrap"><table><thead><tr><th>Periodo</th><th>Trabajador</th><th>Base</th><th>Horas extra</th><th>Feriados</th><th>Bono voluntario</th><th>Descuentos</th><th>Base pensión</th><th>Pensión</th><th>Neto</th><th>Estado</th></tr></thead><tbody>${(data||[]).map(x=>`<tr><td>${date(x.payroll_periods.start_date)}–${date(x.payroll_periods.end_date)}</td><td>${esc(x.workers.full_name)}</td><td>${money(x.base_amount)}</td><td>${money(x.overtime_amount)}</td><td>${money(x.holiday_amount)}</td><td>${money(x.bonuses)}${admin?`<br><button onclick="setVoluntaryBonus(${x.id},${Number(x.bonuses||0)},${Number(x.net_amount||0)})">Editar bono</button>`:''}</td><td>${money(x.attendance_discount+x.manual_discount)}</td><td>${money(x.pension_base_amount)}</td><td>${money(x.pension_discount)}</td><td><b>${money(x.net_amount)}</b></td><td><span class="badge info">${esc(statusLabel(x.payroll_periods.status))}</span></td></tr>`).join('')||'<tr><td colspan="11" class="empty">Aún no hay boletas generadas.</td></tr>'}</tbody></table></div>`;
 }
 const payrollBaseView=payroll;
-payroll=async function(){await payrollBaseView();await getWorkers();const salaries=new Map(state.workers.map(w=>[w.full_name,Number(w.base_salary)])),table=$('#view .table-wrap table');if(!table)return;const header=table.tHead?.rows[0];if(header&&!header.querySelector('.monthly-salary')){const th=document.createElement('th');th.className='monthly-salary';th.textContent='Sueldo mensual total';header.insertBefore(th,header.cells[2]);header.cells[3].textContent='Base del periodo';[...table.tBodies[0].rows].forEach(row=>{if(row.cells.length<3)return;const td=row.insertCell(2),name=row.cells[1].textContent.trim().replace(/\s+/g,' ');td.textContent=money(salaries.get(name)||0)})}};
+payroll=async function(){await payrollBaseView();await getWorkers();const salaries=new Map(state.workers.map(w=>[w.full_name,Number(w.base_salary)])),table=$('#view .table-wrap table');if(!table)return;const header=table.tHead?.rows[0];if(header&&!header.querySelector('.monthly-salary')){const th=document.createElement('th');th.className='monthly-salary';th.textContent='Sueldo mensual total';header.insertBefore(th,header.cells[2]);header.cells[3].textContent='Base del periodo';[...table.tBodies[0].rows].forEach(row=>{if(row.cells.length<3)return;const td=row.insertCell(2),name=row.cells[1].textContent.trim().replace(/\s+/g,' ');td.textContent=money(salaries.get(name)||0)})}if(state.profile.app_role==='admin')await renderImportSummaries()};
 
 async function preparePayroll(){
   const cutoff=prompt('Fecha de cálculo (AAAA-MM-DD):',todayLocal());if(!cutoff)return;
