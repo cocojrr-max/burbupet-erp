@@ -5,6 +5,7 @@ Petalia Inversiones
 - Descomprimir el paquete final.
 - Subir todos los archivos a la raíz del repositorio burbupet-erp y reemplazar los anteriores.
 - Esperar la publicación de GitHub Pages y actualizar con Ctrl + F5.
+- URL oficial: https://cocojrr-max.github.io/burbupet-erp/
 
 2. ALTA DE UN TRABAJADOR
 - Entrar como administrador y abrir Trabajadores.
@@ -65,4 +66,3 @@ Petalia Inversiones
 - Resolver una incidencia y una solicitud de vacaciones.
 - Preparar una planilla de prueba y verificar la boleta.
 - Probar Restablecer contraseña desde el administrador.
-
