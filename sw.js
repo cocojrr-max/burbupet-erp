@@ -1,4 +1,4 @@
-const C='burbupet-erp-v32';
+const C='burbupet-erp-v33';
 
 self.addEventListener('install',event=>{
   self.skipWaiting();
@@ -7,6 +7,7 @@ self.addEventListener('install',event=>{
     'styles.css',
     'reference.css',
     'forms.css',
+    'mobile.css',
     'app.js',
     'burbupet-logo.png',
     'manifest.webmanifest'
