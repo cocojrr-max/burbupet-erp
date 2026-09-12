@@ -1,0 +1,68 @@
+BURBUPET ERP — GUÍA RÁPIDA DE PUESTA EN FUNCIONAMIENTO
+Petalia Inversiones
+
+1. PUBLICACIÓN
+- Descomprimir el paquete final.
+- Subir todos los archivos a la raíz del repositorio burbupet-erp y reemplazar los anteriores.
+- Esperar la publicación de GitHub Pages y actualizar con Ctrl + F5.
+
+2. ALTA DE UN TRABAJADOR
+- Entrar como administrador y abrir Trabajadores.
+- Registrar correo, código del huellero, datos laborales, sueldo mensual total y base pensionaria.
+- Asignar el horario en Horarios.
+- Copiar la invitación y enviarla al trabajador.
+- El trabajador crea su acceso utilizando exactamente el mismo correo registrado.
+
+3. RESTABLECER UNA CONTRASEÑA
+- En Trabajadores, buscar una cuenta con estado Cuenta activa.
+- Pulsar Restablecer contraseña y confirmar.
+- El trabajador recibirá un enlace en su correo.
+- Al abrirlo, BURBUPET ERP le solicitará crear y confirmar su nueva contraseña.
+- El administrador nunca ve ni conoce la contraseña.
+
+4. CARGA DEL HUELLERO
+- Abrir Asistencia y cargar el archivo StandardReport.xls original.
+- El sistema conserva las incidencias ya revisadas y actualiza las nuevas marcaciones.
+- Revisar faltas, tardanzas, marcaciones incompletas y permanencias que superen las reglas configuradas.
+- Las jornadas normales se aprueban automáticamente.
+
+5. CIERRE DE PLANILLA
+- Resolver primero las incidencias y solicitudes pendientes.
+- Abrir Planilla y preparar el periodo.
+- Revisar sueldo, descuentos, pensión, feriados, horas extra y bonos voluntarios.
+- Cerrar la planilla cuando los importes sean correctos.
+- Descargar el reporte y las boletas; después registrar el pago.
+- Una planilla cerrada no se recalcula ni se duplica.
+
+6. VACACIONES
+- El trabajador solicita Vacaciones indicando fecha inicial y final.
+- El sistema cuenta días calendario y valida el saldo anual de 15 días.
+- El administrador aprueba o rechaza; el trabajador recibe una notificación.
+
+7. CONTROL MENSUAL
+- Usar Reportes para revisar cada actualización del huellero.
+- Exportar Asistencia y Planilla a Excel como respaldo operativo.
+- No borrar periodos anteriores: se conservan como historial y se consultan mediante filtros.
+
+8. REGLAS ACTUALES
+- Tolerancia de ingreso: 5 minutos.
+- Permanencia hasta 15 minutos: no genera hora extra.
+- Desde el minuto 16: requiere revisión del administrador.
+- Solo las horas extra aprobadas pasan a planilla.
+- Régimen de microempresa: 15 días de vacaciones; sin CTS, gratificación legal ni asignación familiar.
+
+9. SEGURIDAD
+- Cada trabajador solo puede consultar su propia información.
+- Solo el administrador modifica horarios, marcaciones, reglas y planillas.
+- El trabajador únicamente puede enviar respuestas o sustentos sobre sus incidencias.
+- No compartir la cuenta de administrador.
+- Utilizar contraseñas únicas de al menos 8 caracteres.
+
+10. PRUEBA FINAL RECOMENDADA
+- Crear una cuenta de trabajador de prueba.
+- Asignar horario y abrir su portal.
+- Cargar una copia del reporte del huellero.
+- Resolver una incidencia y una solicitud de vacaciones.
+- Preparar una planilla de prueba y verificar la boleta.
+- Probar Restablecer contraseña desde el administrador.
+
