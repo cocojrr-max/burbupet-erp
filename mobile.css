@@ -79,3 +79,21 @@
   header h1{font-size:1.3rem!important}
   .management-hero h2{font-size:1.3rem!important}
 }
+
+/* Navegación e identidad de usuario */
+.app nav button i{width:23px;height:23px;display:grid;place-items:center;flex:0 0 23px;font-size:0!important}
+.app nav button i svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.app nav button>span{min-width:0}
+.profile .profile-details{display:grid;min-width:0;line-height:1.2}
+.profile .profile-details b,.profile .profile-details small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.profile #profile-name{font-size:.9rem}
+.profile #profile-email{margin-top:4px;font-size:.7rem;color:#708197}
+.profile #profile-role{margin-top:4px;font-size:.77rem;color:#365d8b}
+
+@media(max-width:700px){
+  .app nav button i{width:24px!important;height:24px!important;flex-basis:24px!important}
+  .app nav button i svg{width:21px;height:21px}
+  .profile{align-items:center!important}
+  .profile>span{flex:0 0 46px}
+  .profile .profile-details{display:grid!important;max-width:170px}
+}
