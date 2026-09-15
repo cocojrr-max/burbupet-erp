@@ -1,1 +1,20 @@
-{"name":"BURBUPET ERP","short_name":"BURBUPET","start_url":"./","display":"standalone","background_color":"#f4f1e9","theme_color":"#4d76bb","description":"Gestión de personal de BURBUPET","icons":[{"src":"burbupet-favicon-v38.png","sizes":"any","type":"image/png","purpose":"any"}]}
+{
+  "id": "./",
+  "name": "BURBUPET ERP",
+  "short_name": "BURBUPET",
+  "description": "Gestión de personal, asistencia y planilla de BURBUPET",
+  "lang": "es-PE",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#f4f1e9",
+  "theme_color": "#8fb1d9",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+    {"src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
