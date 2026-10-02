@@ -1,4 +1,4 @@
-const C='burbupet-erp-v63';
+const C='burbupet-erp-v64';
 
 self.addEventListener('install',event=>{
   self.skipWaiting();
@@ -12,12 +12,12 @@ self.addEventListener('install',event=>{
     'burbupet-logo.png',
     'halloween-web.svg',
     'halloween-pumpkin.svg',
-    'icon-32.png',
-    'apple-touch-icon.png',
-    'icon-192.png',
-    'icon-512.png',
-    'icon-maskable-192.png',
-    'icon-maskable-512.png',
+    'icon-halloween-32.png',
+    'apple-touch-icon-halloween.png',
+    'icon-halloween-192.png',
+    'icon-halloween-512.png',
+    'icon-halloween-maskable-192.png',
+    'icon-halloween-maskable-512.png',
     'manifest.webmanifest'
   ])));
 });
