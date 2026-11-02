@@ -521,3 +521,54 @@ async function resolveRequest(id,status){
   if(status==='approved'&&isVacation(req)){const year=String(req.occurrence_date).slice(0,4),{data:approved,error:balanceError}=await db.from('requests').select('id,vacation_days').eq('worker_id',req.worker_id).eq('type','Vacaciones').eq('status','approved').gte('occurrence_date',year+'-01-01').lte('occurrence_date',year+'-12-31').neq('id',id);if(balanceError)return toast(balanceError.message,true);const used=(approved||[]).reduce((s,x)=>s+Number(x.vacation_days||0),0),total=Number(req.workers?.annual_vacation_days||15);if(used+Number(req.vacation_days||0)>total)return toast(`No se puede aprobar: solo quedan ${Math.max(0,total-used)} días disponibles.`,true)}
   const note=prompt('Nota del administrador:')||'',{error}=await db.from('requests').update({status,admin_note:note,reviewed_at:new Date().toISOString(),reviewed_by:state.session.user.id}).eq('id',id);if(error)return toast(error.message,true);await notifyWorker(req.worker_id,`Solicitud ${status==='approved'?'aprobada':'rechazada'}`,`${req.type} del ${date(req.occurrence_date)}${req.end_date?' al '+date(req.end_date):''}. ${note}`.trim(),`request_${id}_${status}`);toast('Solicitud resuelta.');requests()
 }
+
+
+// Gestión detallada de adelantos y conceptos en boletas
+const viewPayslipWithDetails=viewPayslip;
+viewPayslip=async function(id){
+  await viewPayslipWithDetails(id);
+  const {data:item}=await db.from('payroll_items').select('bonuses,adjustment_note').eq('id',id).single();
+  if(Number(item?.bonuses||0)>0&&item?.adjustment_note){
+    const row=[...document.querySelectorAll('#payslip tbody tr')].find(r=>r.cells?.[0]?.textContent.trim()==='Bonificación voluntaria');
+    if(row&&!row.querySelector('.bonus-detail'))row.cells[0].insertAdjacentHTML('beforeend',`<br><small class="bonus-detail">${esc(item.adjustment_note)}</small>`);
+  }
+};
+async function registerAdvanceForWorker(workerId,periodEnd){
+  await getWorkers();
+  const worker=state.workers.find(w=>w.id===Number(workerId)),month=String(periodEnd||todayLocal()).slice(0,7),start=`${month}-01`,suggested=todayLocal().slice(0,7)===month?todayLocal():start;
+  const {data,error}=await db.from('payroll_advances').select('*').eq('worker_id',workerId).gte('advance_date',start).lte('advance_date',periodEnd).order('advance_date',{ascending:false});
+  if(error)return toast(error.message,true);
+  modal(`<h2>Adelantos y pagos parciales</h2><p class="section-copy">Registra, edita o elimina los montos entregados a <b>${esc(worker?.full_name||'trabajador')}</b>. Cada concepto aparecerá detallado en su boleta.</p><form id="worker-advance-form" class="forms"><label>Fecha<input name="advance_date" type="date" value="${suggested}" min="${start}" max="${periodEnd}" required></label><label>Monto<input name="amount" type="number" min="0.01" step="0.01" required></label><label class="full">Concepto o detalle<input name="note" maxlength="300" required placeholder="Ej.: pago parcial de sueldo del 15/10"></label><button class="full">Guardar y recalcular saldo</button></form><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th>Monto</th><th>Acciones</th></tr></thead><tbody>${(data||[]).map(x=>`<tr><td>${date(x.advance_date)}</td><td>${esc(x.note||'Adelanto de sueldo')}</td><td>${money(x.amount)}</td><td class="actions"><button class="secondary" onclick="editPayrollAdvance(${x.id},${workerId},'${periodEnd}')">Editar</button><button class="danger-btn" onclick="deletePayrollAdvance(${x.id},${workerId},'${periodEnd}')">Eliminar</button></td></tr>`).join('')||'<tr><td colspan="4" class="empty">No hay adelantos registrados este mes.</td></tr>'}</tbody></table></div>`);
+  $('#worker-advance-form').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),row={worker_id:Number(workerId),advance_date:f.get('advance_date'),amount:Number(f.get('amount')),note:String(f.get('note')||'').trim(),created_by:state.session.user.id};const {error:saveError}=await db.from('payroll_advances').insert(row);if(saveError)return toast(saveError.message,true);await calculateMonthlyPayroll(payrollRecalculationCutoff(row.advance_date),true);$('#modal')?.remove();toast('Adelanto registrado y saldo recalculado.');payroll()};
+}
+async function editPayrollAdvance(id,workerId,periodEnd){
+  const {data:row,error}=await db.from('payroll_advances').select('*').eq('id',id).single();if(error)return toast(error.message,true);
+  const value=prompt('Nuevo monto del adelanto o pago parcial:',String(row.amount));if(value===null)return;const amount=Number(value);if(!Number.isFinite(amount)||amount<=0)return toast('Ingresa un monto válido.',true);
+  const note=prompt('Concepto o detalle del adelanto:',row.note||'Adelanto de sueldo');if(note===null)return;
+  const {error:updateError}=await db.from('payroll_advances').update({amount,note:String(note).trim()||'Adelanto de sueldo'}).eq('id',id);if(updateError)return toast(updateError.message,true);
+  await calculateMonthlyPayroll(payrollRecalculationCutoff(row.advance_date),true);$('#modal')?.remove();toast('Adelanto actualizado y saldo recalculado.');payroll();
+}
+async function deletePayrollAdvance(id,workerId,periodEnd){
+  const {data:row,error}=await db.from('payroll_advances').select('*').eq('id',id).single();if(error)return toast(error.message,true);
+  if(!confirm(`¿Eliminar el adelanto de ${money(row.amount)} del ${date(row.advance_date)}? El saldo se recalculará automáticamente.`))return;
+  const {error:deleteError}=await db.from('payroll_advances').delete().eq('id',id);if(deleteError)return toast(deleteError.message,true);
+  await calculateMonthlyPayroll(payrollRecalculationCutoff(row.advance_date),true);$('#modal')?.remove();toast('Adelanto eliminado y saldo recalculado.');payroll();
+}
+
+
+// Tema institucional permanente y feriados nacionales del Perú
+applySeasonTheme=function(){document.body.classList.remove('halloween-theme')};
+function easterSunday(year){const a=year%19,b=Math.floor(year/100),c=year%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),month=Math.floor((h+l-7*m+114)/31),day=((h+l-7*m+114)%31)+1;return new Date(year,month-1,day,12)}
+function peruHolidayName(value){
+  const d=localDate(value),year=d.getFullYear(),md=value.slice(5),fixed={'01-01':'Año Nuevo','05-01':'Día del Trabajo','06-07':'Batalla de Arica y Día de la Bandera','06-29':'San Pedro y San Pablo','07-23':'Día de la Fuerza Aérea del Perú','07-28':'Fiestas Patrias','07-29':'Fiestas Patrias','08-06':'Batalla de Junín','08-30':'Santa Rosa de Lima','10-08':'Combate de Angamos','11-01':'Día de Todos los Santos','12-08':'Inmaculada Concepción','12-09':'Batalla de Ayacucho','12-25':'Navidad'};
+  if(fixed[md])return fixed[md];const easter=easterSunday(year),holyThursday=new Date(easter),goodFriday=new Date(easter);holyThursday.setDate(easter.getDate()-3);goodFriday.setDate(easter.getDate()-2);if(value===localISO(holyThursday))return'Jueves Santo';if(value===localISO(goodFriday))return'Viernes Santo';return'';
+}
+const calculateMonthlyPayrollWithAutomaticHolidays=calculateMonthlyPayroll;
+calculateMonthlyPayroll=async function(cutoff,silent=false){
+  if(/^\d{4}-\d{2}-\d{2}$/.test(cutoff)){
+    const month=cutoff.slice(0,7),start=month+'-01',end=monthEnd(month),{data:rows,error}=await db.from('attendance').select('id,work_date,status,review_status,admin_note').gte('work_date',start).lte('work_date',end);
+    if(error){if(!silent)toast(error.message,true);return false}
+    for(const row of rows||[]){const holiday=peruHolidayName(row.work_date);if(!holiday)continue;const update={is_holiday:true};if(row.status!=='present'){update.review_status='justified';update.admin_note=`Feriado nacional reconocido automáticamente: ${holiday}. No genera descuento.`}await db.from('attendance').update(update).eq('id',row.id)}
+  }
+  return calculateMonthlyPayrollWithAutomaticHolidays(cutoff,silent);
+};
